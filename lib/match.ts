@@ -40,15 +40,15 @@ function inferMatchType(
   const isBTechSeniorToA = bothNumeric && yearB > yearA;
 
   // When used from /api/matches, `a` is the current user and `b` is the other profile.
-  // Prefer classifying higher-year students as mentors and same-year students as collaborators
-  // when there is good alignment (reflected in the score).
-  if (score >= 65 && isBTechSeniorToA) return "Mentor";
-  if (score >= 55 && isSameYear) return "Collaborator";
+  // Prefer classifying higher-year students as mentors and same-year students as collaborators,
+  // with generous thresholds so that lists are meaningfully populated.
+  if (isBTechSeniorToA && score >= 50) return "Mentor";
+  if (isSameYear && score >= 40) return "Collaborator";
 
   // Fallback purely on score for non-numeric years or generic comparisons.
-  if (score >= 80) return "Mentor";
-  if (score >= 70) return "Collaborator";
-  if (score >= 45) return "Learning Buddy";
+  if (score >= 65) return "Mentor";
+  if (score >= 45) return "Collaborator";
+  if (score >= 30) return "Learning Buddy";
   return "Low Match";
 }
 

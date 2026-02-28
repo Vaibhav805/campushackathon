@@ -27,6 +27,12 @@ interface MatchWithProfile {
 type RawConnectionStatus = "pending" | "accepted" | "rejected";
 type ConnectionStatus = RawConnectionStatus | "none";
 
+interface Roadmap {
+  "Year 1": string[];
+  "Year 2": string[];
+  "Year 3": string[];
+}
+
 function MatchCard({
   item,
   connectionStatus = "none",
@@ -139,6 +145,7 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
   const [authReady, setAuthReady] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
   const totalMatches = mentors.length + collaborators.length + others.length;
   const clubsCount = CLUBS.length;
   const [connections, setConnections] = useState<
@@ -148,12 +155,19 @@ export default function DashboardPage() {
     Record<string, boolean>
   >({});
   const recommendedClubs = CLUBS.slice(0, 3);
+  const [roadmap, setRoadmap] = useState<Roadmap | null>(null);
+  const [roadmapLoading, setRoadmapLoading] = useState(false);
+  const [roadmapError, setRoadmapError] = useState<string | null>(null);
 
   useEffect(() => {
     createClient()
       .auth.getUser()
       .then(({ data: { user } }) => {
-        if (!user) router.replace("/login");
+        if (!user) {
+          router.replace("/login");
+          return;
+        }
+        setUserId(user.id);
         setAuthReady(true);
       });
   }, [router]);
@@ -164,12 +178,7 @@ export default function DashboardPage() {
     setSearched(true);
 
     try {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
+      if (!userId) {
         router.replace("/login");
         return;
       }
@@ -177,7 +186,7 @@ export default function DashboardPage() {
       const res = await fetch("/api/matches", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id }),
+        body: JSON.stringify({ userId }),
       });
 
       const data = await res.json();
@@ -283,6 +292,51 @@ export default function DashboardPage() {
     }
   }
 
+  async function handleGenerateRoadmap() {
+    setRoadmapLoading(true);
+    setRoadmapError(null);
+    try {
+      if (!userId) {
+        router.replace("/login");
+        return;
+      }
+
+      const res = await fetch("/api/roadmap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+
+      const data: {
+        "Year 1"?: string[];
+        "Year 2"?: string[];
+        "Year 3"?: string[];
+        error?: string;
+      } = await res.json();
+
+      if (!res.ok) {
+        setRoadmap(null);
+        setRoadmapError(data.error || "Failed to generate roadmap");
+        return;
+      }
+
+      const nextRoadmap: Roadmap = {
+        "Year 1": Array.isArray(data["Year 1"]) ? data["Year 1"] : [],
+        "Year 2": Array.isArray(data["Year 2"]) ? data["Year 2"] : [],
+        "Year 3": Array.isArray(data["Year 3"]) ? data["Year 3"] : [],
+      };
+
+      setRoadmap(nextRoadmap);
+    } catch (err) {
+      setRoadmap(null);
+      setRoadmapError(
+        err instanceof Error ? err.message : "Something went wrong"
+      );
+    } finally {
+      setRoadmapLoading(false);
+    }
+  }
+
   return (
     <div className="space-y-8">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -316,19 +370,31 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <section className="flex flex-wrap items-center gap-2 text-xs">
-        <button
-          type="button"
-          className="inline-flex items-center rounded-full border border-dashed border-zinc-300 px-3 py-1.5 font-medium text-zinc-600 hover:border-zinc-400 hover:text-zinc-800 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-zinc-500 dark:hover:text-zinc-100"
-        >
-          Create new file
-        </button>
-        <Link
-          href="/clubs"
-          className="inline-flex items-center rounded-full border border-zinc-300 px-3 py-1.5 font-medium text-zinc-700 hover:border-indigo-400 hover:text-indigo-700 dark:border-zinc-700 dark:text-zinc-200 dark:hover:border-indigo-400 dark:hover:text-indigo-200"
-        >
-          Club features
-        </Link>
+      <section className="flex flex-wrap items-center justify-between gap-2 text-xs">
+        <div className="inline-flex items-center gap-2 text-zinc-500 dark:text-zinc-400">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          <span>Quick actions</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className="inline-flex items-center rounded-full border border-dashed border-zinc-300 px-3 py-1.5 font-medium text-zinc-600 hover:border-zinc-400 hover:text-zinc-800 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-zinc-500 dark:hover:text-zinc-100"
+          >
+            Create new file
+          </button>
+          <Link
+            href="/requests"
+            className="inline-flex items-center rounded-full border border-zinc-300 px-3 py-1.5 font-medium text-zinc-700 hover:border-indigo-400 hover:text-indigo-700 dark:border-zinc-700 dark:text-zinc-200 dark:hover:border-indigo-400 dark:hover:text-indigo-200"
+          >
+            Connection requests
+          </Link>
+          <Link
+            href="/clubs"
+            className="inline-flex items-center rounded-full border border-zinc-300 px-3 py-1.5 font-medium text-zinc-700 hover:border-indigo-400 hover:text-indigo-700 dark:border-zinc-700 dark:text-zinc-200 dark:hover:border-indigo-400 dark:hover:text-indigo-200"
+          >
+            Club features
+          </Link>
+        </div>
       </section>
 
       <section className="grid gap-4 sm:grid-cols-3">
@@ -416,6 +482,104 @@ export default function DashboardPage() {
               </div>
             </article>
           ))}
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+              Your 3-Year AI Roadmap
+            </h2>
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              Generate a personalised, practical roadmap based on your profile and goals.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleGenerateRoadmap}
+            disabled={roadmapLoading || !authReady}
+            className="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-xs font-medium text-white shadow-sm transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 dark:focus:ring-offset-zinc-950"
+          >
+            {roadmapLoading
+              ? "Generating roadmap…"
+              : roadmap
+              ? "Regenerate roadmap"
+              : "Generate roadmap"}
+          </button>
+        </div>
+
+        {roadmapError && (
+          <div className="rounded-lg bg-red-50 px-4 py-2 text-xs text-red-700 dark:bg-red-900/20 dark:text-red-300">
+            {roadmapError}
+          </div>
+        )}
+
+        {roadmap ? (
+          <div className="grid gap-4 md:grid-cols-3">
+            {(["Year 1", "Year 2", "Year 3"] as const).map((yearKey) => {
+              const items = roadmap[yearKey] ?? [];
+              return (
+                <article
+                  key={yearKey}
+                  className="flex flex-col rounded-2xl border border-zinc-200 bg-white p-4 text-xs shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
+                >
+                  <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                    {yearKey}
+                  </h3>
+                  {items.length > 0 ? (
+                    <ul className="mt-2 space-y-1.5 text-zinc-600 dark:text-zinc-300">
+                      {items.map((item, index) => (
+                        <li key={index} className="flex gap-2">
+                          <span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-indigo-500" />
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 text-zinc-500 dark:text-zinc-400">
+                      No items yet for this year. Try regenerating your roadmap.
+                    </p>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-6 text-xs text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400">
+            No roadmap generated yet. Click{" "}
+            <span className="font-medium text-indigo-600 dark:text-indigo-400">
+              Generate roadmap
+            </span>{" "}
+            to get a 3-year AI-focused plan tailored to your profile.
+          </div>
+        )}
+      </section>
+
+      <section className="mt-2 rounded-2xl border border-zinc-200 bg-white p-4 text-xs text-zinc-600 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="font-medium text-zinc-800 dark:text-zinc-100">
+              Need help or have feedback?
+            </p>
+            <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+              Reach out to the Campus Connect team or share ideas to improve your matching experience.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="mailto:support@campusconnect.ai"
+              className="inline-flex items-center rounded-full bg-indigo-600 px-3 py-1.5 text-[11px] font-medium text-white shadow-sm transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-zinc-900"
+            >
+              Contact us
+            </Link>
+            <Link
+              href="/requests"
+              className="inline-flex items-center rounded-full border border-zinc-300 px-3 py-1.5 text-[11px] font-medium text-zinc-700 hover:border-indigo-400 hover:text-indigo-700 dark:border-zinc-700 dark:text-zinc-200 dark:hover:border-indigo-400 dark:hover:text-indigo-200"
+            >
+              View connection requests
+            </Link>
+          </div>
         </div>
       </section>
 
