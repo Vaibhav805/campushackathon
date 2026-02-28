@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type {
   ConnectionRow,
@@ -118,13 +119,13 @@ export async function getAcceptedConnections(): Promise<
 export async function updateConnectionStatus(
   connectionId: string,
   status: ConnectionStatus
-): Promise<void> {
+): Promise<boolean> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) return;
+  if (!user) return false;
 
   const { data: existing, error } = await supabase
     .from("connections")
@@ -132,21 +133,26 @@ export async function updateConnectionStatus(
     .eq("id", connectionId)
     .single<Pick<ConnectionRow, "id" | "receiver_id">>();
 
-  if (error || !existing || existing.receiver_id !== user.id) return;
+  if (error || !existing || existing.receiver_id !== user.id) return false;
 
-  await supabase
+  const { error: updateError } = await supabase
     .from("connections")
     .update({ status })
     .eq("id", connectionId);
 
+  if (updateError) return false;
+
   revalidatePath("/requests");
+  return true;
 }
 
 export async function acceptConnection(connectionId: string): Promise<void> {
-  await updateConnectionStatus(connectionId, "accepted");
+  const ok = await updateConnectionStatus(connectionId, "accepted");
+  if (ok) redirect("/requests");
 }
 
 export async function rejectConnection(connectionId: string): Promise<void> {
-  await updateConnectionStatus(connectionId, "rejected");
+  const ok = await updateConnectionStatus(connectionId, "rejected");
+  if (ok) redirect("/requests");
 }
 

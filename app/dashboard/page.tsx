@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { CLUBS } from "@/lib/clubs";
 
@@ -33,6 +34,24 @@ interface Roadmap {
   "Year 3": string[];
 }
 
+const AVATAR_IMAGES = [
+  "/images/avatars/avatar-1.png",
+  "/images/avatars/avatar-2.png",
+  "/images/avatars/avatar-3.png",
+  "/images/avatars/avatar-4.png",
+  "/images/avatars/avatar-5.png",
+  "/images/avatars/avatar-6.png",
+];
+
+function getAvatarIndex(profileId: string): number {
+  let hash = 0;
+  for (let i = 0; i < profileId.length; i++) {
+    hash = (hash << 5) - hash + profileId.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash) % AVATAR_IMAGES.length;
+}
+
 function MatchCard({
   item,
   connectionStatus = "none",
@@ -47,31 +66,42 @@ function MatchCard({
   const { profile, result } = item;
   const skills = Array.isArray(profile.skills) ? profile.skills : [];
   const interests = Array.isArray(profile.interests) ? profile.interests : [];
+  const avatarSrc = AVATAR_IMAGES[getAvatarIndex(profile.id)];
 
   return (
-    <article className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-400 hover:shadow-md dark:border-zinc-700 dark:bg-zinc-900/70 dark:hover:border-indigo-500">
-      <div className="flex flex-col gap-4">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
+    <article className="group relative overflow-hidden rounded-2xl border-2 border-zinc-200 bg-white p-6 shadow-lg shadow-indigo-500/5 transition-all duration-300 hover:-translate-y-1 hover:border-indigo-300 hover:shadow-xl hover:shadow-indigo-500/10 dark:border-zinc-700 dark:bg-zinc-900/80 dark:hover:border-indigo-500/50">
+      <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br from-indigo-100/80 to-violet-100/80 opacity-60 blur-xl transition-opacity group-hover:opacity-80 dark:from-indigo-900/30 dark:to-violet-900/30" />
+      <div className="relative flex flex-col gap-4">
+        <div className="flex items-start gap-4">
+          <div className="relative flex-shrink-0">
+            <Image
+              src={avatarSrc}
+              alt={profile.name || "Match"}
+              width={56}
+              height={56}
+              className="h-14 w-14 rounded-xl object-cover ring-2 ring-white shadow-md ring-offset-2 ring-offset-zinc-50 transition-all group-hover:ring-indigo-200 dark:ring-zinc-700 dark:ring-offset-zinc-900 dark:group-hover:ring-indigo-500/50"
+            />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h3 className="text-base font-semibold text-zinc-900 dark:text-white">
               {profile.name || "Unnamed"}
             </h3>
             {profile.year && (
-              <span className="mt-1 inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-0.5 text-[11px] font-medium text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200">
+              <span className="mt-1 inline-flex items-center rounded-full bg-gradient-to-r from-indigo-50 to-violet-50 px-2.5 py-0.5 text-[11px] font-medium text-indigo-700 dark:from-indigo-900/40 dark:to-violet-900/40 dark:text-indigo-200">
                 B.Tech Year {profile.year}
               </span>
             )}
           </div>
-          <span className="rounded-full bg-indigo-100 px-3 py-1 text-sm font-semibold text-indigo-800 shadow-sm dark:bg-indigo-900/60 dark:text-indigo-200">
+          <span className="flex-shrink-0 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 px-3 py-1.5 text-sm font-bold text-white shadow-md shadow-indigo-500/25">
             {result.score}%
           </span>
         </div>
-        <p className="text-sm text-zinc-600 dark:text-zinc-300">
+        <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
           {result.reason}
         </p>
         {profile.goal && (
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+          <div className="rounded-lg bg-amber-50/80 p-3 dark:bg-amber-900/20">
+            <p className="text-xs font-medium uppercase tracking-wide text-amber-700 dark:text-amber-300">
               Goal
             </p>
             <p className="mt-0.5 text-sm text-zinc-700 dark:text-zinc-300">
@@ -84,7 +114,7 @@ function MatchCard({
             {skills.map((s) => (
               <span
                 key={s}
-                className="rounded-full bg-zinc-200 px-2.5 py-0.5 text-xs text-zinc-800 dark:bg-zinc-600 dark:text-zinc-200"
+                className="rounded-lg bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200"
               >
                 {s}
               </span>
@@ -96,7 +126,7 @@ function MatchCard({
             {interests.map((i) => (
               <span
                 key={i}
-                className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300"
+                className="rounded-lg bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-700 dark:bg-violet-900/30 dark:text-violet-200"
               >
                 {i}
               </span>
@@ -112,7 +142,7 @@ function MatchCard({
               connectionStatus === "pending" ||
               connectionStatus === "accepted"
             }
-            className="inline-flex items-center rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-default disabled:opacity-60"
+            className="inline-flex items-center rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all hover:from-indigo-700 hover:to-violet-700 hover:shadow-indigo-500/30 disabled:cursor-default disabled:opacity-60 disabled:shadow-none"
           >
             {connectionStatus === "accepted"
               ? "Connected"
@@ -130,8 +160,8 @@ function MatchCard({
 
 function EmptyState({ message }: { message: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-dashed border-zinc-300 p-12 text-center dark:border-zinc-600">
-      <p className="text-sm text-zinc-500 dark:text-zinc-400">{message}</p>
+    <div className="rounded-2xl border-2 border-dashed border-indigo-200 bg-gradient-to-br from-indigo-50/50 to-violet-50/50 p-12 text-center dark:border-indigo-800 dark:from-indigo-950/30 dark:to-violet-950/30">
+      <p className="text-sm text-zinc-600 dark:text-zinc-300">{message}</p>
     </div>
   );
 }
@@ -339,58 +369,68 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-white">
-            Dashboard
-          </h1>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            Run matching to find mentors, collaborators, and clubs that fit your profile.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={handleFindMatches}
-            disabled={loading || !authReady}
-            className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 dark:focus:ring-offset-zinc-950"
-          >
-            {loading ? (
-              <>
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                Finding matches…
-              </>
-            ) : (
-              "Find Matches"
+      <header className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 p-6 text-white shadow-xl shadow-indigo-500/20">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold tracking-tight text-white drop-shadow-sm">
+                Dashboard
+              </h1>
+              <Link
+                href="/"
+                className="inline-flex items-center rounded-lg border border-white/30 bg-white/20 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm transition hover:bg-white/30"
+              >
+                Home
+              </Link>
+            </div>
+            <p className="mt-1 text-sm text-white/90">
+              Run matching to find mentors, collaborators, and clubs that fit your profile.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={handleFindMatches}
+              disabled={loading || !authReady}
+              className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-indigo-600 shadow-lg transition hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-indigo-500 disabled:opacity-50"
+            >
+              {loading ? (
+                <>
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  Finding matches…
+                </>
+              ) : (
+                "Find Matches"
+              )}
+            </button>
+            {!authReady && (
+              <span className="text-xs text-white/80">Checking auth…</span>
             )}
-          </button>
-          {!authReady && (
-            <span className="text-xs text-zinc-500">Checking auth…</span>
-          )}
+          </div>
         </div>
       </header>
 
-      <section className="flex flex-wrap items-center justify-between gap-2 text-xs">
-        <div className="inline-flex items-center gap-2 text-zinc-500 dark:text-zinc-400">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+      <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-zinc-100/80 p-4 dark:bg-zinc-800/50">
+        <div className="inline-flex items-center gap-2 text-sm font-medium text-zinc-600 dark:text-zinc-300">
+          <span className="h-2 w-2 rounded-full bg-emerald-500" />
           <span>Quick actions</span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            className="inline-flex items-center rounded-full border border-dashed border-zinc-300 px-3 py-1.5 font-medium text-zinc-600 hover:border-zinc-400 hover:text-zinc-800 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-zinc-500 dark:hover:text-zinc-100"
+            className="inline-flex items-center rounded-xl border-2 border-dashed border-indigo-200 px-4 py-2 font-medium text-indigo-600 transition hover:border-indigo-400 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-300 dark:hover:border-indigo-600 dark:hover:bg-indigo-950/50"
           >
             Create new file
           </button>
           <Link
             href="/requests"
-            className="inline-flex items-center rounded-full border border-zinc-300 px-3 py-1.5 font-medium text-zinc-700 hover:border-indigo-400 hover:text-indigo-700 dark:border-zinc-700 dark:text-zinc-200 dark:hover:border-indigo-400 dark:hover:text-indigo-200"
+            className="inline-flex items-center rounded-xl border-2 border-indigo-200 bg-indigo-50 px-4 py-2 font-medium text-indigo-700 transition hover:border-indigo-400 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-200 dark:hover:bg-indigo-900/50"
           >
             Connection requests
           </Link>
           <Link
             href="/clubs"
-            className="inline-flex items-center rounded-full border border-zinc-300 px-3 py-1.5 font-medium text-zinc-700 hover:border-indigo-400 hover:text-indigo-700 dark:border-zinc-700 dark:text-zinc-200 dark:hover:border-indigo-400 dark:hover:text-indigo-200"
+            className="inline-flex items-center rounded-xl border-2 border-violet-200 bg-violet-50 px-4 py-2 font-medium text-violet-700 transition hover:border-violet-400 hover:bg-violet-100 dark:border-violet-800 dark:bg-violet-950/50 dark:text-violet-200 dark:hover:bg-violet-900/50"
           >
             Club features
           </Link>
@@ -398,58 +438,58 @@ export default function DashboardPage() {
       </section>
 
       <section className="grid gap-4 sm:grid-cols-3">
-        <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+        <div className="group rounded-2xl border-2 border-indigo-100 bg-gradient-to-br from-indigo-50 to-white p-5 shadow-md transition-all hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-lg dark:border-indigo-900/50 dark:from-indigo-950/40 dark:to-zinc-900">
+          <p className="text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
             Matches
           </p>
-          <p className="mt-2 text-2xl font-semibold text-zinc-900 dark:text-white">
+          <p className="mt-2 text-3xl font-bold text-indigo-700 dark:text-indigo-300">
             {totalMatches}
           </p>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
             Mentors, collaborators, and other connections.
           </p>
         </div>
-        <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+        <div className="group rounded-2xl border-2 border-violet-100 bg-gradient-to-br from-violet-50 to-white p-5 shadow-md transition-all hover:-translate-y-0.5 hover:border-violet-200 hover:shadow-lg dark:border-violet-900/50 dark:from-violet-950/40 dark:to-zinc-900">
+          <p className="text-xs font-semibold uppercase tracking-wider text-violet-600 dark:text-violet-400">
             Clubs
           </p>
-          <p className="mt-2 text-2xl font-semibold text-zinc-900 dark:text-white">
+          <p className="mt-2 text-3xl font-bold text-violet-700 dark:text-violet-300">
             {clubsCount}
           </p>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
             Discover communities across AI, quant, finance, robotics, and more.
           </p>
         </div>
-        <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+        <div className="group rounded-2xl border-2 border-fuchsia-100 bg-gradient-to-br from-fuchsia-50 to-white p-5 shadow-md transition-all hover:-translate-y-0.5 hover:border-fuchsia-200 hover:shadow-lg dark:border-fuchsia-900/50 dark:from-fuchsia-950/40 dark:to-zinc-900">
+          <p className="text-xs font-semibold uppercase tracking-wider text-fuchsia-600 dark:text-fuchsia-400">
             Skill gaps
           </p>
-          <p className="mt-2 text-2xl font-semibold text-zinc-900 dark:text-white">
+          <p className="mt-2 text-3xl font-bold text-fuchsia-700 dark:text-fuchsia-300">
             {totalMatches > 0 ? 3 : 0}
           </p>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
             Areas where mentors and clubs can help you grow.
           </p>
         </div>
       </section>
 
-      <section className="space-y-3">
+      <section className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+          <h2 className="text-base font-semibold text-zinc-800 dark:text-zinc-200">
             Recommended clubs
           </h2>
           <Link
             href="/clubs"
-            className="text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+            className="text-sm font-medium text-indigo-600 hover:underline dark:text-indigo-400"
           >
-            View all
+            View all →
           </Link>
         </div>
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-3">
           {recommendedClubs.map((club) => (
             <article
               key={club.id}
-              className="rounded-2xl border border-zinc-200 bg-white p-4 text-xs shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-400 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900"
+              className="rounded-2xl border-2 border-zinc-200 bg-white p-4 text-xs shadow-md transition-all hover:-translate-y-1 hover:border-violet-300 hover:shadow-lg dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-violet-600/50"
             >
               <div className="mb-2 flex items-start justify-between gap-2">
                 <div>
@@ -606,7 +646,8 @@ export default function DashboardPage() {
       {!isEmpty && (mentors.length > 0 || collaborators.length > 0 || others.length > 0) && (
         <div className="space-y-10">
           <section>
-            <h2 className="mb-4 text-lg font-medium text-zinc-800 dark:text-zinc-200">
+            <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-zinc-800 dark:text-zinc-200">
+              <span className="flex h-2 w-2 rounded-full bg-indigo-500" />
               Top Mentors
             </h2>
             {mentors.length === 0 ? (
@@ -628,7 +669,8 @@ export default function DashboardPage() {
           </section>
 
           <section>
-            <h2 className="mb-4 text-lg font-medium text-zinc-800 dark:text-zinc-200">
+            <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-zinc-800 dark:text-zinc-200">
+              <span className="flex h-2 w-2 rounded-full bg-violet-500" />
               Top Collaborators
             </h2>
             {collaborators.length === 0 ? (
@@ -651,7 +693,8 @@ export default function DashboardPage() {
 
           {others.length > 0 && (
             <section>
-              <h2 className="mb-4 text-lg font-medium text-zinc-800 dark:text-zinc-200">
+              <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-zinc-800 dark:text-zinc-200">
+                <span className="flex h-2 w-2 rounded-full bg-fuchsia-500" />
                 Other potential matches
               </h2>
               <ul className="grid gap-4 sm:grid-cols-2">
