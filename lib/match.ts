@@ -1,5 +1,3 @@
-import { getGeminiModel } from "@/lib/gemini";
-
 export interface MatchProfile {
   name: string;
   year: string;
@@ -14,130 +12,101 @@ export interface MatchResult {
   match_type: "Mentor" | "Collaborator" | "Learning Buddy" | "Low Match";
   reason: string;
 }
-
-const SYSTEM_PROMPT = `You are an AI system that evaluates compatibility between two university students for mentorship or collaboration.
-
-Your task:
-Given two student profiles, calculate a compatibility score from 0 to 100.
-
-Scoring Guidelines:
-- Skills overlap increases compatibility.
-- Shared interests increase compatibility.
-- Complementary skills (one knows what the other wants to learn) increases compatibility.
-- Similar goals increases compatibility.
-- Senior mentoring junior (if open_to_mentorship is true) increases compatibility.
-- Completely unrelated profiles should score below 30.
-
-Return STRICT JSON only. No explanations outside JSON.
-Return format:
-{"score": number (0-100), "match_type": "Mentor" | "Collaborator" | "Learning Buddy" | "Low Match", "reason": "One short sentence explaining why they are a good match."}
-
-Remember: Return only valid JSON. No markdown. No additional commentary.`;
-
-function buildPrompt(studentA: MatchProfile, studentB: MatchProfile): string {
-  return `Student A:
-${JSON.stringify(studentA)}
-
-Student B:
-${JSON.stringify(studentB)}`;
+function normalizeArray(values: string[]): string[] {
+  return values.map((v) => v.trim().toLowerCase()).filter(Boolean);
 }
 
-function parseJsonResponse(text: string): MatchResult {
-  let cleaned = text.trim();
-
-  // Remove markdown code blocks if present
-  const codeBlockMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (codeBlockMatch) {
-    cleaned = codeBlockMatch[1].trim();
-  }
-
-  // Extract JSON object if there's extra text
-  const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-  if (jsonMatch) {
-    cleaned = jsonMatch[0];
-  }
-
-  let parsed: MatchResult;
-  try {
-    parsed = JSON.parse(cleaned) as MatchResult;
-  } catch {
-    // Fallback: try to extract fields with regex
-    const scoreMatch = cleaned.match(/"score"\s*:\s*(\d+(?:\.\d+)?)/);
-    const typeMatch = cleaned.match(/"match_type"\s*:\s*"(\w+(?:\s+\w+)?)"/);
-    const reasonMatch = cleaned.match(/"reason"\s*:\s*"((?:[^"\\]|\\.)*)"/);
-
-    const score = scoreMatch ? Math.max(0, Math.min(100, Math.round(parseFloat(scoreMatch[1])))) : 50;
-    const matchType = typeMatch?.[1] ?? "Collaborator";
-    const validTypes = ["Mentor", "Collaborator", "Learning Buddy", "Low Match"];
-    const match_type = validTypes.includes(matchType) ? (matchType as MatchResult["match_type"]) : "Collaborator";
-    const reason = reasonMatch?.[1]?.replace(/\\(.)/g, "$1") ?? "Good potential match based on profile.";
-
-    parsed = { score, match_type, reason };
-  }
-
-  if (
-    typeof parsed.score !== "number" ||
-    !["Mentor", "Collaborator", "Learning Buddy", "Low Match"].includes(parsed.match_type) ||
-    typeof parsed.reason !== "string"
-  ) {
-    throw new Error("Invalid match result structure");
-  }
-  parsed.score = Math.max(0, Math.min(100, Math.round(parsed.score)));
-  return parsed;
+function getOverlapCount(a: string[], b: string[]): number {
+  const setB = new Set(b);
+  return a.filter((v) => setB.has(v)).length;
 }
 
-function isRateLimitError(err: unknown): boolean {
-  const msg = err instanceof Error ? err.message : String(err);
-  return msg.includes("429") || msg.includes("Too Many Requests") || msg.includes("quota");
+function getGoalOverlap(a: string, b: string): number {
+  const wordsA = normalizeArray(a.split(/\s+/));
+  const wordsB = normalizeArray(b.split(/\s+/));
+  if (wordsA.length === 0 || wordsB.length === 0) return 0;
+  return getOverlapCount(wordsA, wordsB);
 }
 
-function getRetryDelayMs(err: unknown): number {
-  const msg = err instanceof Error ? err.message : String(err);
-  const match = msg.match(/retry in (\d+(?:\.\d+)?)s/i);
-  return match ? Math.ceil(parseFloat(match[1]) * 1000) : 8000;
+function inferMatchType(
+  score: number,
+  a: MatchProfile,
+  b: MatchProfile
+): MatchResult["match_type"] {
+  const yearA = parseInt(a.year, 10);
+  const yearB = parseInt(b.year, 10);
+  const bothNumeric = Number.isFinite(yearA) && Number.isFinite(yearB);
+  const isSameYear = bothNumeric && yearA === yearB;
+  const isBTechSeniorToA = bothNumeric && yearB > yearA;
+
+  // When used from /api/matches, `a` is the current user and `b` is the other profile.
+  // Prefer classifying higher-year students as mentors and same-year students as collaborators
+  // when there is good alignment (reflected in the score).
+  if (score >= 65 && isBTechSeniorToA) return "Mentor";
+  if (score >= 55 && isSameYear) return "Collaborator";
+
+  // Fallback purely on score for non-numeric years or generic comparisons.
+  if (score >= 80) return "Mentor";
+  if (score >= 70) return "Collaborator";
+  if (score >= 45) return "Learning Buddy";
+  return "Low Match";
 }
 
-async function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function buildReason(
+  score: number,
+  sharedSkills: number,
+  sharedInterests: number
+): string {
+  if (score < 30) {
+    return "Profiles are quite different with limited overlap in skills and interests.";
+  }
+  const parts: string[] = [];
+  if (sharedSkills > 0) {
+    parts.push(`you share ${sharedSkills} overlapping skill${sharedSkills > 1 ? "s" : ""}`);
+  }
+  if (sharedInterests > 0) {
+    parts.push(`you have ${sharedInterests} common interest${sharedInterests > 1 ? "s" : ""}`);
+  }
+  if (parts.length === 0) {
+    return "You have some potential alignment based on your profiles.";
+  }
+  return `Strong potential match because ${parts.join(" and ")}.`;
 }
 
 export async function computeCompatibility(
   studentA: MatchProfile,
   studentB: MatchProfile
 ): Promise<MatchResult> {
-  const model = await getGeminiModel();
-  const prompt = buildPrompt(studentA, studentB);
-  const fullPrompt = SYSTEM_PROMPT + "\n\n" + prompt;
+  const skillsA = normalizeArray(studentA.skills);
+  const skillsB = normalizeArray(studentB.skills);
+  const interestsA = normalizeArray(studentA.interests);
+  const interestsB = normalizeArray(studentB.interests);
 
-  const maxRetries = 3;
-  let lastError: unknown;
+  const sharedSkills = getOverlapCount(skillsA, skillsB);
+  const sharedInterests = getOverlapCount(interestsA, interestsB);
+  const goalOverlap = getGoalOverlap(studentA.goal, studentB.goal);
 
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const result = await model.generateContent({
-        contents: [{ role: "user", parts: [{ text: fullPrompt }] }],
-        generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: 512,
-        },
-      });
+  let score = 0;
 
-      const response = result.response;
-      const text = response.text();
-      if (!text) {
-        throw new Error("No response from Gemini");
-      }
-      return parseJsonResponse(text);
-    } catch (err) {
-      lastError = err;
-      if (attempt < maxRetries && isRateLimitError(err)) {
-        const delay = getRetryDelayMs(err);
-        await sleep(delay);
-      } else {
-        throw err;
-      }
-    }
+  // Weight skills most, then interests, then goals.
+  score += sharedSkills * 18; // up to ~70 if many overlaps
+  score += sharedInterests * 10; // up to ~30
+  score += Math.min(goalOverlap * 4, 20); // cap goal contribution
+
+  // Small baseline if there is at least some data filled in.
+  const hasAnyData =
+    skillsA.length + skillsB.length + interestsA.length + interestsB.length > 0 ||
+    studentA.goal.trim() !== "" ||
+    studentB.goal.trim() !== "";
+  if (hasAnyData) {
+    score = Math.max(score, 25);
   }
 
-  throw lastError;
+  // Clamp score to [0, 100].
+  score = Math.max(0, Math.min(100, Math.round(score)));
+
+  const match_type = inferMatchType(score, studentA, studentB);
+  const reason = buildReason(score, sharedSkills, sharedInterests);
+
+  return { score, match_type, reason };
 }

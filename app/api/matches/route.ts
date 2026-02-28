@@ -71,7 +71,6 @@ export async function POST(request: Request) {
     for (const other of otherUsers) {
       const otherMatchProfile = toMatchProfile(other);
       const result = await computeCompatibility(myMatchProfile, otherMatchProfile);
-      await new Promise((r) => setTimeout(r, 1500));
       results.push({
         profile: {
           id: other.id,
